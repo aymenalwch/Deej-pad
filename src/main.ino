@@ -27,18 +27,21 @@ String currentDir ="";
 unsigned long lastButtonPress = 0;
 
 uint8_t gHue = 120;                                       //Keep track of the colour wanted
-int CurrentLedMode = 1;
+int NumOfModes = 5;
 int CurrentLedBrightness = 40;
-int NumOfModes = 6;
+int currentLedMode = 0;
 int Hue = 0;
-int stickBgBrightness = 25;
 int stripBrightness = 255;
+int stickBgBrightness = stripBrightness*0.15;
 int stripHue = 0;
-int ledMode;
 int visLength;
 
-unsigned long startMillis;           //some global variables available anywhere in the program
-unsigned long currentMillis;
+// char Layer1[ROWS][COLS] = {
+//   {"F1", "F2", "F3",  "F4",  "F5",  "F6"},
+//   {"F7", "F8", "F9", "F10", "F11", "F12"}
+// };
+unsigned long start, finished, elapsed;
+unsigned long startMillis, currentMillis, previousMillis;           //some global variables available anywhere in the program
 const unsigned long displayTime = 2000;   //the value is a number of milliseconds
 
 const int NUM_SLIDERS = 6;
@@ -48,28 +51,31 @@ const int buttonInputs[NUM_BUTTONS] = {7,12,11,10,9,8,7,12,11,10, 9, 8};
 
 int analogSliderValues[NUM_SLIDERS];
 int buttonValues[NUM_BUTTONS] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-SimpleRotary rotary(RotaryCLK,RotaryDT,40);    //Setup media rotary encoder
-byte RDir, PrevRDir;                        //Keep track of Rotary Encoder Direction
+SimpleRotary rotary(RotaryCLK,RotaryDT,40);    //Setup media rotary encoders
+byte RDir, PrevRDir;                          //Keep track of Rotary Encoder Direction
 
 // Constants for row and column sizes
 const byte ROWS = 2;
 const byte COLS = 6;
 // Connections to Arduino
 byte rowPins[ROWS] = {6, 5};
-byte colPins[COLS] = {7,12,11,10, 9, 8};
+byte colPins[COLS] = {11,12,10,9,7,8};
 // Array to represent keys on keypad
-char Layer1[ROWS][COLS] = {
+char Keymap1[ROWS][COLS] = {
   {'1', '2', '3', '4', '5', '6'},
   {'7', '8', '9', 'a', 'b', 'c'}
 };
+
+
 // Create keypad object
-Keypad Pad1 = Keypad(makeKeymap(Layer1), rowPins, colPins, ROWS, COLS);
+Keypad Pad1 = Keypad(makeKeymap(Keymap1), rowPins, colPins, ROWS, COLS);
 
 // ------------------------------------------------------------------------------------------SETUP
 void setup() {
   pinMode(RotaryCLK, INPUT_PULLUP);
   pinMode(RotaryDT, INPUT_PULLUP);
 //  pinMode(RotarySW, INPUT_PULLUP);
+  attachInterrupt (digitalPinToInterrupt (RotaryDT), nextLedMode, CHANGE); // pressed
   
   for (int i = 0; i < NUM_SLIDERS; i++) {
     pinMode(analogInputs[i], INPUT);
@@ -89,28 +95,32 @@ void setup() {
 // ------------------------------------------------------------------------------------------LOOP
 void loop() {
 //  unsigned long currentMillis = millis();
+  start=millis();
+
   updateMatrix();
   updateSerialValues();
   sendSerialData();           // Actually send data (all the time)
-  LedMode(ledMode);
-
-  for (int i = 0; i < NUM_BUTTONS; i++) {
-    // buttonValues[i] = digitalRead(buttonInputs[i]);
-    if (buttonValues[3] == 0 ) {
-      ledMode = 1;
-    } else if (buttonValues[4] == 0) {
-      ledMode = 2;
-    } else if (buttonValues[5] == 0) {
-      ledMode = 3;
-    }
-  }
-
+  // encoder();
+  LedMode(currentLedMode);
 
     // Put in a slight delay to help debounce the reading
-  delay(50);
+  delay(4);
 }
 
 // ------------------------------------------------------------------------------------------MORE
+void F1() { }
+void F2() { }
+void F3() { stripHue = map(analogSliderValues[2], 0, 1023, 0, 255); }
+void F4() { FastLED.setBrightness(stripBrightness = map(analogSliderValues[3], 0, 1023, 0, 255)); }
+void F5() { if (stickBgBrightness != 0) {stickBgBrightness = 0;} else {stickBgBrightness = (stripBrightness*0.15);} }
+void F6() { nextLedMode(); }
+void F7() { }
+void F9() { }
+void F8() { }
+void F10() { }
+void F11() { }
+void F12() { previousLedMode(); }
+// ------------------------------------------------------------------------------------------
 void sendSerialData() {
   String builtString = String("");
   for (int i = 0; i < NUM_SLIDERS; i++) {
@@ -129,8 +139,6 @@ void sendSerialData() {
     }
   }
   Serial.println(builtString);
-  // Serial.print(String(currentDir));
-  // Serial.println(String(counter));
 }
 // ------------------------------------------------------------------------------------------
 void updateSerialValues() {
@@ -147,40 +155,24 @@ void updateSerialValues() {
 //      Serial.println("newLength "+ String(i) + String(newLength));
     }
   }
+}
 
-  // // Read the current state of CLK
-  // currentStateCLK = digitalRead(RotaryCLK);
-  //   // If last and current state of CLK are different, then pulse occurred
-  //   // React to only 1 state change to avoid double count
-  // if (currentStateCLK != lastStateCLK  && currentStateCLK == 1){
-  //   // If the DT state is different than the CLK state then
-  //   // the encoder is rotating CCW so decrement
-  //   if (digitalRead(RotaryDT) != currentStateCLK) {
-  //     counter --;
-  //     currentDir ="CCW";
-  //   } else {
-  //     // Encoder is rotating CW so increment
-  //     counter ++;
-  //     currentDir ="CW";
-  //   }
-  // }
-  
-  // // Remember last CLK state
-  // lastStateCLK = currentStateCLK;
-  // // Read the button state
-//  int btnState = digitalRead(RotarySW);
+// void encoder() {
+//   // Remember last CLK state
+//   lastStateCLK = currentStateCLK;
+//   // Read the button state
+//   int btnState = digitalRead(RotarySW);
 //  //If we detect LOW signal, button is pressed
-//  if (btnState == LOW) {
+//   if (btnState == LOW) {
 //    //if 50ms have passed since last LOW pulse, it means that the
 //    //button has been pressed, released and pressed again
-//    if (millis() - lastButtonPress > 50) {
-//      Serial.println("Button pressed!");
-//    }
+//     if (millis() - lastButtonPress > 50) {
+//     Serial.println("Button pressed!");
+//   }
 //    // Remember last button press event
-//    lastButtonPress = millis();
-//  }
-
-  }
+//   lastButtonPress = millis();
+//   }
+// }
 
 // --------------------------------------------------------------------------------------------
 void updateMatrix() {
@@ -191,39 +183,51 @@ void updateMatrix() {
       switch (customKey) {
       case '1':
         buttonValues[0] = 0;
+        F1();
         break;
       case '2':
         buttonValues[1] = 0;
+        F2();
         break;
       case '3':
         buttonValues[2] = 0;
+        F3();
         break;
       case '4':
         buttonValues[3] = 0;
+        F4();
         break;
       case '5':
         buttonValues[4] = 0;
+        F5();
         break;
       case '6':
         buttonValues[5] = 0;
+        F6();
         break;
       case '7':
         buttonValues[6] = 0;
+        F7();
         break;
       case '8':
         buttonValues[7] = 0;
+        F8();
         break;
       case '9':
         buttonValues[8] = 0;
+        F9();
         break;
       case 'a':
         buttonValues[9] = 0;
+        F10();
         break;
       case 'b':
         buttonValues[10] = 0;
+        F11();
         break;
       case 'c':
         buttonValues[11] = 0;
+        F12();
         break;
       default:
         break;
@@ -234,69 +238,191 @@ void updateMatrix() {
       }
     }
 }
+// ------------------------------------------------------------------------------------------
+void encoder() {
+    // Read the current state of CLK
+  currentStateCLK = digitalRead(RotaryCLK);
+    // If last and current state of CLK are different, then pulse occurred
+    // React to only 1 state change to avoid double count
+  // if (currentStateCLK != lastStateCLK  && currentStateCLK == 1){
+  if (currentStateCLK != lastStateCLK  && currentStateCLK == 0){
+    // If the DT state is different than the CLK state then
+    // the encoder is rotating CCW so decrement
+    if (digitalRead(RotaryDT) == currentStateCLK) {
+      counter += 1;
+      currentDir ="CW";
+      // Serial.println(counter);
+    } else {
+      // Encoder is rotating CW so increment
+      counter -= 1;
+      currentDir ="CCW";
+    }
+    Serial.print(String(currentDir));
+    Serial.println(counter);
+  }
+}
+
+void visualizer (int volValue) {
+  fill_solid(ledArray[0], 8, CHSV( 0, 0, stickBgBrightness));
+  fill_solid(ledArray[0], volValue, CHSV(stripHue, 255, (stripBrightness*0.25)));
+  if (millis() - startMillis >= displayTime) {
+    fill_solid(ledArray[0], 8, CHSV( 0, 0, stickBgBrightness));
+  }
+  FastLED.show();
+}
 
 // -------------------------------------------------------------------------RGB
+void previousLedMode() {
+  if (currentLedMode > 0) {
+    currentLedMode--;
+  } else {
+    currentLedMode = NumOfModes;
+  }
+}
+void nextLedMode() {
+  if (currentLedMode < (NumOfModes)) {
+    currentLedMode++;
+  } else {
+    currentLedMode = 0;
+  }
+}
+
 void LedMode (int Select) {
-  CurrentLedMode = Select;
-  int brightness = analogRead(analogInputs[0]);
-  brightness = map(brightness, 0, 1023, 0, 255);
+  // int brightness = analogRead(analogInputs[0]);
+  // brightness = map(brightness, 0, 1023, 0, 255);
   switch(Select)
   {
     case 0:
       fill_solid(rawLeds, NUM_LEDS, CRGB::Black);
+      FastLED.show();
       break;
     case 1:
       visualizer(visLength);
       fill_solid(ledArray[1], 5, CHSV( stripHue, 255, stripBrightness));   //4 is number of leds in the strip
       // fill_solid(ledArray[1], 5, CHSV( gHue++, 255, stripBrightness));   //vertical rainbow swipe
       for (int i = 0; i < NUM_BUTTONS; i++) {
-      // buttonValues[i] = digitalRead(buttonInputs[i]);
-        if (buttonValues[0] == 0 ) {
-          stickBgBrightness = map(analogSliderValues[0], 0, 1023, 0, 255);
-        }
-        if (buttonValues[1] == 0 ) {
-          stripBrightness = map(analogSliderValues[1], 0, 1023, 0, 255);
-        }
-        if (buttonValues[2] == 0 ) {
-          stripHue = map(analogSliderValues[2], 0, 1023, 0, 255);
-        }
       }
       break;
+
     case 2:
-      fill_rainbow(ledArray[0], 8, gHue--, 11);   //vertical rainbow swipe
-      fill_rainbow(ledArray[1], 5, gHue--, 16);   //vertical rainbow swipe
-      //  fill_gradient(ledArray[1], 4, CHSV( 120, 255, 255), CHSV( 220, 255, 255),FORWARD_HUES );
-      FastLED.setBrightness(brightness);
-      FastLED.show();
-      break;
-    case 3:
       visualizer(visLength);
       fill_solid(ledArray[1], 5, CHSV( gHue+=2, 255, stripBrightness));   //4 is number of leds in the strip
       // fill_solid(ledArray[1], 5, CHSV( gHue++, 255, stripBrightness));   //vertical rainbow swipe
-      for (int i = 0; i < NUM_BUTTONS; i++) {
-      // buttonValues[i] = digitalRead(buttonInputs[i]);
-        if (buttonValues[0] == 0 ) {
-          stickBgBrightness = map(analogSliderValues[0], 0, 1023, 0, 255);
-        }
-        if (buttonValues[1] == 0 ) {
-          stripBrightness = map(analogSliderValues[1], 0, 1023, 0, 255);
-        }
-        if (buttonValues[2] == 0 ) {
-          stripHue = map(analogSliderValues[2], 0, 1023, 0, 255);
-        }
-      }
       break;
-    default:
+
+    case 3:
+      visualizer(visLength);
+      fill_rainbow(ledArray[1], 5, gHue--, 16);   //vertical rainbow swipe
+      // fill_rainbow(ledArray[0], 8, gHue--, 11);   //vertical rainbow swipe
+      FastLED.show();
+      //  fill_gradient(ledArray[1], 4, CHSV( 120, 255, 255), CHSV( 220, 255, 255),FORWARD_HUES );
+      break;
+
+    case 4:
+      // SnowSparkle - Color (red, green, blue), sparkle delay, speed delay
+      SnowSparkle(20, random(200,1600));
+      break;
+    case 5:
+      // Sparkle - first led, last led, speed delay
+      // SparkleRandom(0, 7, 30, 0);
+      SparkleRandom(8, 12, stripBrightness, 0);
       break;
   }
 }
 
-void visualizer (int volValue) {
-  fill_solid(ledArray[0], 8, CHSV( 0, 0, stickBgBrightness));
-  fill_solid(ledArray[0], volValue, CHSV(stripHue, 255, 70));
-  if (millis() - startMillis >= displayTime) {
-//    fill_solid(ledArray[0], volValue, CRGB::Black);
-    fill_solid(ledArray[0], 8, CHSV( 0, 0, stickBgBrightness));
+// =========================================================================================================================================================================
+// *************************
+// ** LEDEffect Functions **
+// *************************
+
+void FadeInPixel(int pixel, byte red, byte green, byte blue, int SpeedDelay){
+  float r, g, b;
+  for(int k = 0; k < 256; k=k+(SpeedDelay)) {
+      r = (k/256.0)*red;
+      g = (k/256.0)*green;
+      b = (k/256.0)*blue;
+      setPixel(pixel,r,g,b);
+      FastLED.show();
+  }
+  FadeOutPixel(pixel,r,g,b,SpeedDelay);
+}
+void FadeOutPixel(int pixel, byte red, byte green, byte blue, int SpeedDelay){
+  float r, g, b;
+  for(int k = 255; k >= 0; k=k-(SpeedDelay)) {
+      r = (k/256.0)*red;
+      g = (k/256.0)*green;
+      b = (k/256.0)*blue;
+      setPixel(pixel,r,g,b);
+      FastLED.show();
+  }
+}
+void SnowSparkle(int SparkleDelay, int SpeedDelay) {
+  setAll(1,1,1);
+  fill_solid(ledArray[0], 8, CHSV(stripHue, 255, (255*0.2)));
+  fill_solid(ledArray[1], 5, CHSV(stripHue, 255, 255));
+  int Pixel = random(NUM_LEDS);
+  setPixel(Pixel,0xff,0xff,0xff);
+  FastLED.show();
+  delay(SparkleDelay);
+  fill_solid(ledArray[0], 8, CHSV(stripHue, 255, (255*0.2)));
+  fill_solid(ledArray[1], 5, CHSV(stripHue, 255, 255));
+  FastLED.show();
+  delay(SpeedDelay);
+}
+
+void SparkleRandom(int px1, int px2, int brightness, unsigned long SpeedDelay) {
+  setAll(0,0,0);
+  byte r = random(0,brightness);
+  byte g = random(0,brightness);
+  byte b = random(0,brightness);
+  int Pixel = random(px1,px2);
+  int fade = random(10,25) / 10;
+  currentMillis=millis();
+  if(currentMillis - previousMillis > SpeedDelay) {
+    FadeInPixel(Pixel,r,g,b,fade);
+    previousMillis=millis();
+  }
+}
+
+
+// void RunningLights(byte red, byte green, byte blue, int WaveDelay) {
+//   int Position=0;
+
+//   for(int i=0; i<NUM_LEDS*2; i++) {
+//     Position++; // = 0; //Position + Rate;
+//     for(int i=0; i<NUM_LEDS; i++) {
+//       // sine wave, 3 offset waves make a rainbow!
+//       //float level = sin(i+Position) * 127 + 128;
+//       //setPixel(i,level,0,0);
+//       //float level = sin(i+Position) * 127 + 128;
+//       setPixel(i,((sin(i+Position) * 127 + 128)/255)*red,
+//                  ((sin(i+Position) * 127 + 128)/255)*green,
+//                  ((sin(i+Position) * 127 + 128)/255)*blue);
+//     }
+
+//     FastLED.show();
+//     delay(WaveDelay);
+//   }
+// }
+
+// ***************************************
+// ** FastLed/NeoPixel Common Functions **
+// ***************************************
+
+// Set a LED color (not yet visible)
+void setPixel(int Pixel, byte red, byte green, byte blue) {
+  #ifndef ADAFRUIT_NEOPIXEL_H
+   // FastLED
+    leds[Pixel].r = red;
+    leds[Pixel].g = green;
+    leds[Pixel].b = blue;
+  #endif
+}
+
+// Set all LEDs to a given color and apply it (visible)
+void setAll(byte red, byte green, byte blue) {
+  for(int i = 0; i < NUM_LEDS; i++ ) {
+    setPixel(i, red, green, blue);
   }
   FastLED.show();
 }
